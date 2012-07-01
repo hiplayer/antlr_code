@@ -1,0 +1,287 @@
+#!/usr/bin/perl
+######################################################################
+# BTEQ script in Perl, generate by Script Wizard
+# Date Time    : 2003-09-24 15:31:11
+# Table : ${PDATADB}.T00_INT_RATE_INFO
+# Script File  : T00_INT_RATE_INFO_init0200.pl
+######################################################################
+
+use strict; # Declare using Perl strict syntax
+
+#
+# If you are using other Perl's package, declare here
+#
+
+######################################################################
+# Variable Section
+my $AUTO_HOME = $ENV{"AUTO_HOME"};
+unshift(@INC, "${AUTO_HOME}/bin");   
+require spdbedw;
+my $PDATADB = $SPDBEDW::PDATADB;
+my $SDATADB = $SPDBEDW::SDATADB;;
+my $PTEMPDB = $SPDBEDW::WORKDB;
+my $PAPPLDB = $SPDBEDW::PAPPLDB;
+
+my $MAXDATE = $SPDBEDW::MAXDATE;
+if ( !defined($MAXDATE) ) {
+   $MAXDATE = "99991231";
+}
+my $NULLDATE = $SPDBEDW::NULLDATE;
+if ( !defined($NULLDATE) ) {
+    $NULLDATE = "00010101";
+}
+my $ILLDATE = $SPDBEDW::ILLDATE;
+if ( !defined($ILLDATE) ) {
+    $ILLDATE = "00010102";
+}
+
+
+my $SDDL = $SPDBEDW::SDDLDB;
+if ( !defined($SDDL) ) {
+   $SDDL = "SDDL";
+}
+my $LOGON_STR;
+my $LOGON_FILE = "${AUTO_HOME}/etc/LOGON_DW_PUSR";
+my $CONTROL_FILE = "";
+
+my $TX_DATE = "";
+
+my $SCRIPT = "t00_fx_rate_pm0200.pl";
+
+######################################################################
+# BTEQ function
+sub run_bteq_command
+{
+   my $rc = open(BTEQ, "| bteq");
+
+   # To see if bteq command invoke ok?
+   unless ($rc) {
+      print "Could not invoke BTEQ command\n";
+      return -1;
+   }
+
+   ### Below are BTEQ scripts ###
+   print BTEQ <<ENDOFINPUT;
+
+${LOGON_STR}
+.WIDTH 253
+
+CREATE VOLATILE MULTISET TABLE Z00_FX_RATE_PM AS ${PDATADB}.T00_FX_RATE_PM WITH no DATA ON COMMIT PRESERVE ROWS;
+
+.IF ERRORCODE <> 0 THEN .QUIT 12;
+
+/*把汇率数据插入临时表*/
+INSERT INTO Z00_FX_RATE_PM 
+	(
+	Currency_Cd				/*货币代码*/
+	,Start_Dttm				/*开始时间截*/
+	,Convert_Unit				/*折算单位*/
+	,Buy_Exchange_Fx_Price				/*汇买价*/
+	,Sell_Exchange_Fx_Price				/*汇卖价*/
+	,Mid_Price				/*中间价*/
+	,Buy_Cash_Fx_Price				/*钞买价*/
+	,Sell_Cash_Fx_Price				/*钞卖价*/
+	,Square_Buy_Fx_Price				/*平盘买入价*/
+	,Square_Sell_Fx_Price				/*平盘卖出价*/
+	,Convert_To_Usd_Price				/*美元折算价*/
+	,Convert_To_Eur_Price				/*欧元折算价*/
+	,Year_Settle_Fx_Price				/*年度结算牌价*/
+	,End_Dttm				/*结束时间戳*/
+	)									
+select 
+	HUOBDH                   		 /*货币代码*/ 
+	,CAST(SXIORQ||(SHJIAN (FORMAT '999999')) AS TIMESTAMP(0) FORMAT 'YYYYMMDDHHMISS') AS Start_Dttm          	        	/*开始时间截*/          
+	,COALESCE(DANWEI,'')				/*折算单位*/            
+	,COALESCE(MAIRUJ,'')				/*汇买价*/      
+	,COALESCE(MAICHJ,'')				/*汇卖价*/      
+	,COALESCE(ZHNGJJ,'')				/*中间价*/              
+	,COALESCE(CHMRUJ,'')				/*钞买价*/      
+	,COALESCE(CHMCHJ,'')				/*钞卖价*/      
+	,COALESCE(PPMRJA,'')				/*平盘买入价*/  
+	,COALESCE(PPMCJA,'')				/*平盘卖出价*/  
+	,COALESCE(MEYZSJ,'')				/*美元折算价*/  
+	,COALESCE(OYUJSJ,'')		        	/*欧元折算价*/    
+	,COALESCE(NDJSPJ,'')	                        /*年度结算牌价*/                          
+	,TIMESTAMP'9999-12-31 00:00:00'                                	 /*结束时间戳*/  
+FROM ${SDATADB}.CBS_PHLCS
+WHERE JILUZT not in ('4','5','J','R');
+
+.IF ERRORCODE <> 0 THEN .QUIT 12;
+
+/*把源表中删除(正常删除、误删)数据插入临时表*/
+INSERT INTO Z00_FX_RATE_PM 
+	(
+	Currency_Cd				/*货币代码*/
+	,Start_Dttm				/*开始时间截*/
+	,Convert_Unit				/*折算单位*/
+	,Buy_Exchange_Fx_Price				/*汇买价*/
+	,Sell_Exchange_Fx_Price				/*汇卖价*/
+	,Mid_Price				/*中间价*/
+	,Buy_Cash_Fx_Price				/*钞买价*/
+	,Sell_Cash_Fx_Price				/*钞卖价*/
+	,Square_Buy_Fx_Price				/*平盘买入价*/
+	,Square_Sell_Fx_Price				/*平盘卖出价*/
+	,Convert_To_Usd_Price				/*美元折算价*/
+	,Convert_To_Eur_Price				/*欧元折算价*/
+	,Year_Settle_Fx_Price				/*年度结算牌价*/
+	,End_Dttm				/*结束时间戳*/
+	)
+select 
+	T1.Currency_Cd				/*货币代码*/
+	,T1.Start_Dttm				/*开始时间截*/
+	,T1.Convert_Unit				/*折算单位*/
+	,T1.Buy_Exchange_Fx_Price				/*汇买价*/
+	,T1.Sell_Exchange_Fx_Price				/*汇卖价*/
+	,T1.Mid_Price				/*中间价*/
+	,T1.Buy_Cash_Fx_Price				/*钞买价*/
+	,T1.Sell_Cash_Fx_Price				/*钞卖价*/
+	,T1.Square_Buy_Fx_Price				/*平盘买入价*/
+	,T1.Square_Sell_Fx_Price				/*平盘卖出价*/
+	,T1.Convert_To_Usd_Price				/*美元折算价*/
+	,T1.Convert_To_Eur_Price				/*欧元折算价*/
+	,T1.Year_Settle_Fx_Price				/*年度结算牌价*/
+	,T1.End_Dttm				/*结束时间戳*/
+FROM ${PDATADB}.T00_FX_RATE_PM T1
+/*如果源表删除记录属于正常删除则保留以下两行，若果属于误删则注掉以下两行，默认为注掉*/
+--join (select Currency_Cd,MIN(Start_Dttm) Start_Dttm FROM Z00_FX_RATE_PM GROUP BY 1) T2
+--ON T1.Currency_Cd=T2.Currency_Cd and T1.Start_Dttm<T2.Start_Dttm
+WHERE (T1.Currency_Cd,T1.Start_Dttm) not IN (select Currency_Cd,Start_Dttm FROM Z00_FX_RATE_PM)
+;
+  
+.IF ERRORCODE <> 0 THEN .QUIT 12;
+ 
+BT;
+
+delete FROM ${PDATADB}.T00_FX_RATE_PM;
+
+.IF ERRORCODE <> 0 THEN .QUIT 12;
+
+/*把临时表数据加载到目标表*/
+INSERT INTO ${PDATADB}.T00_FX_RATE_PM
+	(
+	Currency_Cd				/*货币代码*/
+	,Start_Dttm				/*开始时间截*/
+	,Convert_Unit				/*折算单位*/
+	,Buy_Exchange_Fx_Price				/*汇买价*/
+	,Sell_Exchange_Fx_Price				/*汇卖价*/
+	,Mid_Price				/*中间价*/
+	,Buy_Cash_Fx_Price				/*钞买价*/
+	,Sell_Cash_Fx_Price				/*钞卖价*/
+	,Square_Buy_Fx_Price				/*平盘买入价*/
+	,Square_Sell_Fx_Price				/*平盘卖出价*/
+	,Convert_To_Usd_Price				/*美元折算价*/
+	,Convert_To_Eur_Price				/*欧元折算价*/
+	,Year_Settle_Fx_Price				/*年度结算牌价*/
+	,End_Dttm				/*结束时间戳*/
+	)
+select 
+	A.Currency_Cd                    /*货币代码*/ 
+	,COALESCE(A.Start_Dttm,TIMESTAMP'0001-01-01 00:00:00')                  	/*开始时间截*/          
+	,COALESCE(A.Convert_Unit,'')		/*折算单位*/            
+	,COALESCE(A.Buy_Exchange_Fx_Price,'')			/*汇买价*/      
+	,COALESCE(A.Sell_Exchange_Fx_Price,'')			/*汇卖价*/      
+	,COALESCE(A.Mid_Price,'')				/*中间价*/              
+	,COALESCE(A.Buy_Cash_Fx_Price,'')				/*钞买价*/      
+	,COALESCE(A.Sell_Cash_Fx_Price,'')				/*钞卖价*/      
+	,COALESCE(A.Square_Buy_Fx_Price,'')				/*平盘买入价*/  
+	,COALESCE(A.Square_Sell_Fx_Price,'')				/*平盘卖出价*/  
+	,COALESCE(A.Convert_To_Usd_Price,'')				/*美元折算价*/  
+	,COALESCE(A.Convert_To_Eur_Price,'')		        	/*欧元折算价*/    
+	,COALESCE(A.Year_Settle_Fx_Price,'')	                        /*年度结算牌价*/                          
+	,COALESCE(B.Start_Dttm,TIMESTAMP'9999-12-31 00:00:00')                                 	 /*结束时间戳*/                                  
+FROM 
+(select
+	RANK(Start_Dttm ASC) AS ID   	     	      /*序号*/
+	,Currency_Cd				/*货币代号*/
+	,Start_Dttm				/*生效时间戳*/
+	,Convert_Unit				/*单位*/
+	,Buy_Exchange_Fx_Price			/*汇买价*/
+	,Sell_Exchange_Fx_Price			/*汇卖价*/
+	,Mid_Price				/*中间价*/
+	,Buy_Cash_Fx_Price			/*钞买价*/
+	,Sell_Cash_Fx_Price			/*钞卖价*/
+	,Square_Buy_Fx_Price			/*平盘买入价*/
+	,Square_Sell_Fx_Price			/*平盘卖出价*/
+	,Convert_To_Usd_Price			/*美元折算价*/
+	,Convert_To_Eur_Price			/*欧元结算价*/
+	,Year_Settle_Fx_Price			/*年度结算牌价*/
+FROM Z00_FX_RATE_PM
+GROUP BY Currency_Cd) A
+LEFT join
+(select                           
+	RANK(Start_Dttm ASC)-1 AS ID         	     /*序号*/
+	,Currency_Cd				/*货币代号*/
+	,Start_Dttm			/*生效时间戳*/
+FROM Z00_FX_RATE_PM
+GROUP BY Currency_Cd) B
+on A.ID=B.ID and A.Currency_Cd=B.Currency_Cd;     
+
+.IF ERRORCODE <> 0 THEN .QUIT 12;
+
+ET;
+
+.LOGOFF;
+.QUIT 0;
+
+ENDOFINPUT
+
+   ### End of BTEQ scripts ###
+   close(BTEQ);
+
+   my $RET_CODE = $? >> 8;
+
+   # if the return code is 12, that means something error happen
+   # so we return 1, otherwise, we return 0 means ok
+   if ( $RET_CODE == 12 ) {
+      return 1;
+   }
+   else {
+      return 0;
+   }
+}
+
+######################################################################
+# main function
+sub main
+{
+   my $ret;
+   open(LOGONFILE_H, "${LOGON_FILE}");
+   $LOGON_STR = <LOGONFILE_H>;
+   close(LOGONFILE_H);
+
+   # Get the decoded logon string
+   $LOGON_STR = `${AUTO_HOME}/bin/IceCode.exe "$LOGON_STR"`;
+   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time());
+   $year += 1900;
+   $mon = sprintf("%02d", $mon + 1);
+   $mday = sprintf("%02d", $mday);
+   my $today = "${year}${mon}${mday}";
+
+   # Call bteq command to load data
+   $ret = run_bteq_command();
+
+   print "run_bteq_command() = $ret";
+   return $ret;
+}
+
+######################################################################
+# program section
+
+# To see if there is one parameter,
+# if there is no parameter, exit program
+if ( $#ARGV < 0 ) {
+   exit(1);
+}
+
+# Get the first argument
+$CONTROL_FILE = $ARGV[0];
+
+$TX_DATE = substr(${CONTROL_FILE},length(${CONTROL_FILE})-8, 8);
+if ( substr(${CONTROL_FILE}, length(${CONTROL_FILE})-3, 3) eq 'dir' ) {
+    $TX_DATE = substr(${CONTROL_FILE},length(${CONTROL_FILE})-12, 8);
+};
+open(STDERR, ">&STDOUT");
+
+my $ret = main();
+
+exit($ret);
